@@ -34,12 +34,13 @@ class BlendedRate < Sequel::Model(:blended_rates)
     # an active-range shrink preserves readiness immediately. Chunks replace themselves transactionally, and a final
     # immediate sweep re-checks bounds to prune rows outside the active date range without racing concurrent backfills.
     def rebuild
-      window = db.transaction(mode: :immediate) do
+      window = db.transaction do
+        WriteLock.acquire(db)
         first = Rate.blendable.min(:date)
         if first
-          min = Date.parse(first)
+          min = Date.parse(first.to_s)
           dataset.where { date < min }.delete
-          min..Date.parse(Rate.blendable.max(:date))
+          min..Date.parse(Rate.blendable.max(:date).to_s)
         else
           dataset.delete
           nil
@@ -51,14 +52,15 @@ class BlendedRate < Sequel::Model(:blended_rates)
         refresh_chunk(chunk)
       end
 
-      db.transaction(mode: :immediate) do
+      db.transaction do
+        WriteLock.acquire(db)
         bounds = Rate.blendable.select(
           Sequel.function(:min, :date).as(:min),
           Sequel.function(:max, :date).as(:max),
         ).first
         next unless bounds[:min]
 
-        active_window = Date.parse(bounds[:min])..Date.parse(bounds[:max])
+        active_window = Date.parse(bounds[:min].to_s)..Date.parse(bounds[:max].to_s)
         dataset.exclude(date: active_window).delete
       end
     end
@@ -87,7 +89,8 @@ class BlendedRate < Sequel::Model(:blended_rates)
     # computed from a snapshot another backfill has since changed. Inside a backfill's transaction it simply joins,
     # since that transaction already holds the write lock.
     def refresh_chunk(chunk)
-      db.transaction(**(db.in_transaction? ? {} : { mode: :immediate })) do
+      db.transaction do
+        WriteLock.acquire(db)
         lookback_start = chunk.begin - CarryForward::LOOKBACK_DAYS
         rows = Rate.blendable.where(date: lookback_start..chunk.end).naked.all
         anchors = rows.map { |r| r[:date] }.uniq.select { |d| chunk.cover?(d) }.sort

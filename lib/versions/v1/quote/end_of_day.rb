@@ -32,7 +32,8 @@ module Versions
           scope = Rate.where(provider: "ECB").where(date: (date_val - 14)..date_val)
           scope = scope.only(*(symbols + [base])) if symbols
 
-          CarryForward.apply(scope.naked.all, date: date_val)
+          # PostgreSQL has no implicit row order; SQLite returned index order (by quote).
+          CarryForward.apply(scope.order(:date, :quote).naked.all, date: date_val)
         end
       end
     end

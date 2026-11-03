@@ -30,7 +30,7 @@ module Versions
           scope = Rate.where(provider: "ECB").between(date)
           scope = scope.only(*(symbols + [base])) if symbols
 
-          scope.naked
+          scope.order(:date, :quote).naked
         end
       end
     end

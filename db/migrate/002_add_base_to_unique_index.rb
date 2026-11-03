@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 Sequel.migration do
+  # PostgreSQL: CREATE/DROP INDEX CONCURRENTLY cannot run inside a transaction.
+  no_transaction
+
   up do
     drop_index :rates, [:provider, :date, :quote], concurrently: true
     add_index :rates, [:provider, :date, :base, :quote], unique: true, concurrently: true

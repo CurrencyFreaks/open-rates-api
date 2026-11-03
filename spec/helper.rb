@@ -2,6 +2,7 @@
 
 require_relative "../boot"
 require_relative "fixtures"
+require_relative "temp_database"
 
 Fixtures.seed!
 

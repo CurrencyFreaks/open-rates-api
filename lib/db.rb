@@ -3,32 +3,39 @@
 require "sequel"
 require "rate_components"
 
+# PostgreSQL fork: DATABASE_URL must point at a PostgreSQL server, for example
+#   postgres://frankfurter:secret@postgres:5432/frankfurter
+# Without it, a local server is assumed (PGHOST/PGUSER/PGPASSWORD/PGPORT) with one database per APP_ENV, and per
+# parallel test worker.
 url = ENV.fetch("DATABASE_URL") do
   env = ENV["APP_ENV"]
   worker = ENV["TEST_ENV_NUMBER"]
   suffix = worker && !worker.empty? ? "_#{worker}" : ""
   db_name = env ? "frankfurter_#{env}#{suffix}" : "frankfurter"
-  "sqlite://#{Dir.pwd}/db/#{db_name}.sqlite3"
+  user = ENV.fetch("PGUSER", "postgres")
+  password = ENV.fetch("PGPASSWORD", "")
+  auth = password.empty? ? user : "#{user}:#{password}"
+  "postgres://#{auth}@#{ENV.fetch("PGHOST", "localhost")}:#{ENV.fetch("PGPORT", "5432")}/#{db_name}"
 end
 
-unless url.start_with?("sqlite")
-  abort "Frankfurter now uses SQLite. Remove DATABASE_URL or set it to a sqlite URL."
+unless url.start_with?("postgres")
+  abort "This Frankfurter fork uses PostgreSQL. Set DATABASE_URL to a postgres:// URL."
 end
 
-busy_timeout_ms = Integer(ENV.fetch("SQLITE_BUSY_TIMEOUT", 60_000))
 max_connections = Integer(ENV.fetch("MAX_THREADS", 5))
-connect_sqls = [
-  "PRAGMA journal_mode=WAL",
-  "PRAGMA synchronous=NORMAL",
-  "PRAGMA mmap_size=134217728",
-  "PRAGMA journal_size_limit=27103364",
-].freeze
 
-DB = Sequel.connect(
-  url,
-  after_connect: proc do |conn|
-    conn.busy_handler_timeout = busy_timeout_ms
-  end,
-  connect_sqls:,
-  max_connections:,
-)
+# test: false connects on first query, as the SQLite version did, so loading this file never needs a live server.
+DB = Sequel.connect(url, max_connections:, test: false)
+
+# SQLite allowed one writer at a time and the code relies on that: backfills, blend refreshes and rollups assume no
+# other writer interleaves. PostgreSQL runs writers concurrently, so every write transaction that used to take SQLite's
+# write lock (mode: :immediate, or the first write of a backfill) takes this transaction-scoped advisory lock instead.
+module WriteLock
+  KEY = 0x6672616e # "fran"
+
+  class << self
+    def acquire(db = DB)
+      db.get(Sequel.function(:pg_advisory_xact_lock, KEY))
+    end
+  end
+end

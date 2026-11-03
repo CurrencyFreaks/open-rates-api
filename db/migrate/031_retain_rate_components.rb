@@ -16,14 +16,14 @@ Sequel.migration do
     # decimal calculation and precision policy as ingest. BOJA historically uses the sell quote when its buying quote is
     # zero; preserve that exception without representing the sell quote as a published mid.
     run <<~SQL
-      ALTER TABLE rates ADD COLUMN rate REAL GENERATED ALWAYS AS (
+      ALTER TABLE rates ADD COLUMN rate double precision GENERATED ALWAYS AS (
         COALESCE(mid,
           CASE
-            WHEN provider = 'BOJA' AND bid = 0 THEN frankfurter_midpoint(ask, ask)
-            ELSE frankfurter_midpoint(bid, ask)
+            WHEN provider = 'BOJA' AND bid = 0 THEN ask
+            WHEN bid IS NOT NULL AND ask IS NOT NULL THEN frankfurter_round_digits((bid + ask) / 2.0)
           END
         )
-      ) VIRTUAL
+      ) STORED
     SQL
   end
 

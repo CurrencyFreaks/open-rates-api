@@ -76,7 +76,7 @@ describe "COMESA Dollar migration" do
 
     Dir.mktmpdir do |dir|
       environment = {
-        "DATABASE_URL" => "sqlite://#{File.join(dir, "migration.sqlite3")}",
+        "DATABASE_URL" => TempDatabase.url(dir),
         "APP_ENV" => "test",
       }
       output, status = Open3.capture2e(

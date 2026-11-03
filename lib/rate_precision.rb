@@ -32,9 +32,10 @@ module RatePrecision
       Float(format(FORMAT, rate))
     end
 
-    # The same rounding SQLite-side, for stripping noise from rows stored before this policy existed.
+    # The same rounding database-side, for stripping noise from rows stored before this policy existed. PostgreSQL has
+    # no printf('%.12g'), so frankfurter_round_digits (created by migration 001) rounds to DIGITS significant digits.
     def sql(column)
-      Sequel.cast(Sequel.function(:printf, FORMAT, column), Float)
+      Sequel.function(:frankfurter_round_digits, column)
     end
   end
 end

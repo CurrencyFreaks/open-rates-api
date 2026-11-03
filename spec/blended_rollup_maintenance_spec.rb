@@ -61,7 +61,7 @@ describe "Grouped blend maintenance" do
 
     _(BlendedWeeklyRate.ready?).must_equal(true)
     _(BlendedMonthlyRate.ready?).must_equal(true)
-    _(BlendedWeeklyRate.max(:bucket_date)).must_be(:<, date.to_s)
+    _(BlendedWeeklyRate.max(:bucket_date)).must_be(:<, date)
   end
 
   it "releases the source transaction before blending rebuilt provider buckets" do
@@ -243,13 +243,17 @@ describe "Grouped blend maintenance" do
     bucket = DB.get(Bucket.week(dates.last.to_s))
     prior = BlendedWeeklyRate.where(bucket_date: bucket).order(:quote).all.map(&:values)
     DB.run(<<~SQL)
-      CREATE TEMP TRIGGER fail_rollup_repair BEFORE INSERT ON weekly_rates
-      BEGIN SELECT RAISE(ABORT, 'failed provider bucket repair'); END
+      CREATE FUNCTION pg_temp.fail_rollup_repair() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'failed provider bucket repair'; END $$
+    SQL
+    DB.run(<<~SQL)
+      CREATE TRIGGER fail_rollup_repair BEFORE INSERT ON weekly_rates
+      FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_rollup_repair()
     SQL
     begin
       _ { RateValidation::FutureDate.stub(:horizon, dates.first) { RateValidation.purge(DB) } }.must_raise(Sequel::DatabaseError)
     ensure
-      DB.run("DROP TRIGGER fail_rollup_repair")
+      DB.run("DROP TRIGGER fail_rollup_repair ON weekly_rates")
     end
 
     _(Rate.where(provider: "ECB", quote: "XDR").count).must_equal(2)

@@ -105,7 +105,7 @@ class Provider < Sequel::Model(:providers)
   def last_synced
     # There seems to be no Sequel-level way to make the aggregate auto-cast.
     date = Rate.where(provider: key).max(:date)
-    Date.parse(date) if date
+    Date.parse(date.to_s) if date
   end
 
   def publishes_missed(reference_date: Date.today)
@@ -113,7 +113,7 @@ class Provider < Sequel::Model(:providers)
     return unless end_date
 
     cron = Fugit::Cron.parse(publish_schedule)
-    last_date = Date.parse(end_date)
+    last_date = Date.parse(end_date.to_s)
 
     case publish_cadence
     when "daily"
@@ -152,10 +152,10 @@ class Provider < Sequel::Model(:providers)
       warn_revisions(records) if adapter.revises?
 
       inserted = db.transaction(savepoint: true) do
-        before = db.get(Sequel.lit("total_changes()"))
-        Rate.dataset.insert_conflict(target: [:provider, :date, :base, :quote])
-          .multi_insert(records.map { |record| RateComponents.attributes(record) })
-        count = db.get(Sequel.lit("total_changes()")) - before
+        WriteLock.acquire(db)
+        # RETURNING lists only the rows actually inserted (conflicts are skipped), replacing SQLite's total_changes().
+        count = Rate.dataset.insert_conflict(target: [:provider, :date, :base, :quote]).returning(:date)
+          .multi_insert(records.map { |record| RateComponents.attributes(record) }).size
         if count.positive?
           affected_currencies = records.flat_map { |r| [r[:base], r[:quote]] }.uniq
           dates = records.map { |r| r[:date] }.uniq
@@ -180,7 +180,6 @@ class Provider < Sequel::Model(:providers)
 
       # Purge stays last: purging before the blend refresh commits would let the edge re-cache stale blends.
       Cache.purge_debounced
-      db.run("PRAGMA optimize")
     end
     Log.info("#{key}: fetched no records") unless fetched
   rescue StandardError => e

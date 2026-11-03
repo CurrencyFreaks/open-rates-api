@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 Sequel.migration do
+  # PostgreSQL: CREATE/DROP INDEX CONCURRENTLY cannot run inside a transaction.
+  no_transaction
+
   up do
     drop_index(:weekly_rates, [:bucket_date, :provider], concurrently: true)
     [:weekly_rates, :monthly_rates].each do |table|

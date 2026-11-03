@@ -116,7 +116,8 @@ module RateValidation
       affected = []
       repairs = PRECISION.keys.to_h { |table| [table, {}] }
 
-      db.transaction(savepoint: true, **(db.in_transaction? ? {} : { mode: :immediate })) do
+      db.transaction(savepoint: true) do
+        WriteLock.acquire(db)
         RATE_TABLES.each do |table|
           date_column = table == :rates ? :date : :bucket_date
           precision = PRECISION[table]

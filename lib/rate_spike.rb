@@ -34,10 +34,11 @@ module RateSpike
         Sequel.function(:lead, :date).over(**window).as(:next_date),
       ).from_self
 
-      # SQLite's two-argument max and min are scalar and return NULL when either neighbour is missing.
-      high = Sequel.function(:max, :prev_rate, :next_rate)
-      low = Sequel.function(:min, :prev_rate, :next_rate)
-      days = ->(from, to) { Sequel.function(:julianday, to) - Sequel.function(:julianday, from) }
+      # GREATEST and LEAST skip NULLs, unlike SQLite's scalar max and min, but a missing neighbour already fails the gap
+      # checks below (NULL date arithmetic), so the result is the same.
+      high = Sequel.function(:greatest, :prev_rate, :next_rate)
+      low = Sequel.function(:least, :prev_rate, :next_rate)
+      days = ->(from, to) { Sequel[to] - Sequel[from] }
       neighbours
         .where(days.call(:prev_date, :date) <= MAX_GAP_DAYS)
         .where(days.call(:date, :next_date) <= MAX_GAP_DAYS)
@@ -56,7 +57,7 @@ module RateSpike
       found = detect(scope).where(date: judged).all
       stored = dataset.where(provider:, date: judged)
       key = ->(row) { [row[:date].to_s, row[:base], row[:quote]] }
-      changed = (found.to_set(&key) ^ stored.all.to_set(&key)).map { |date, _, _| Date.parse(date) }.uniq
+      changed = (found.to_set(&key) ^ stored.all.to_set(&key)).map { |date, _, _| Date.parse(date.to_s) }.uniq
       return [] if changed.empty?
 
       stored.delete

@@ -11,10 +11,13 @@ describe RateComponents do
     Rate.where(identity).first
   end
 
-  it "exposes rate as a virtual column without storing a fourth price" do
-    schema = DB.fetch("PRAGMA table_xinfo(rates)").all
+  # PostgreSQL fork: the column is STORED (PostgreSQL 18 virtual columns cannot call user-defined functions), so the
+  # check is that the database computes it rather than accepting a written value.
+  it "exposes rate as a generated column the database computes" do
+    generated = DB[Sequel[:information_schema][:columns]]
+      .where(table_name: "rates", column_name: "rate").get(:is_generated)
 
-    _(schema.find { |column| column[:name] == "rate" }[:hidden]).must_equal(2)
+    _(generated).must_equal("ALWAYS")
   end
 
   it "prefers a published mid even when the sides have a different midpoint" do
@@ -25,7 +28,7 @@ describe RateComponents do
     _(stored(bid: 181.5264, ask: 181.76)[:rate]).must_equal(181.6432)
   end
 
-  it "normalizes midpoint precision in SQL via printf" do
+  it "normalizes midpoint precision in SQL" do
     _(stored(bid: 1830.59054685, ask: 1831.5063)[:rate]).must_equal(1831.04842343)
   end
 

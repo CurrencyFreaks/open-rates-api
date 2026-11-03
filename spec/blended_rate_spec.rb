@@ -65,7 +65,7 @@ describe BlendedRate do
 
     it "prunes stale leading rows upfront so readiness is maintained after a range shrink" do
       BlendedRate.rebuild
-      first_date = Date.parse(Rate.blendable.min(:date))
+      first_date = Date.parse(Rate.blendable.min(:date).to_s)
       stale_early = first_date - 10
       BlendedRate.dataset.insert(date: stale_early, quote: "EUR", rate: 1.0)
 
@@ -89,8 +89,8 @@ describe BlendedRate do
 
     it "prunes rows at exact day boundaries outside the active rate range" do
       BlendedRate.rebuild
-      first_date = Date.parse(Rate.blendable.min(:date))
-      last_date = Date.parse(Rate.blendable.max(:date))
+      first_date = Date.parse(Rate.blendable.min(:date).to_s)
+      last_date = Date.parse(Rate.blendable.max(:date).to_s)
 
       stale_prev = first_date - 1
       stale_next = last_date + 1
@@ -132,8 +132,8 @@ describe BlendedRate do
       BlendedRate.rebuild
 
       _(BlendedRate.dataset.count).must_be(:>, 0)
-      _(BlendedRate.min(:date)).must_equal(single_date.to_s)
-      _(BlendedRate.max(:date)).must_equal(single_date.to_s)
+      _(BlendedRate.min(:date).to_s).must_equal(single_date.to_s)
+      _(BlendedRate.max(:date).to_s).must_equal(single_date.to_s)
       _(BlendedRate.ready?).must_equal(true)
     end
 

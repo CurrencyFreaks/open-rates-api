@@ -25,7 +25,8 @@ def rebuild_rollups(source, provider = nil)
   models = [BlendedWeeklyRate, BlendedMonthlyRate]
   affected = {}
 
-  DB.transaction(savepoint: true, **(DB.in_transaction? ? {} : { mode: :immediate })) do
+  DB.transaction(savepoint: true) do
+    WriteLock.acquire(DB)
     models.each do |model|
       affected[model] = model.source.blendable.where(scope).select(:bucket_date).distinct.select_map(:bucket_date)
     end

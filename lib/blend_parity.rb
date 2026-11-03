@@ -209,7 +209,7 @@ class BlendParity
       first = Rate.dataset.min(:date)
       raise "no rates data" unless first
 
-      Date.parse(first)..Date.parse(Rate.dataset.max(:date))
+      Date.parse(first.to_s)..Date.parse(Rate.dataset.max(:date).to_s)
     end
   end
 

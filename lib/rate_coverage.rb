@@ -59,9 +59,9 @@ module RateCoverage
     check_deadline!
     Sequel.&(
       anchor >= first,
-      anchor <= Sequel.function(:date, last, "+#{lookback} days"),
+      anchor <= Date.parse(last.to_s) + lookback,
       dataset.where(date <= anchor)
-        .where(date >= Sequel.function(:date, anchor, "-#{lookback} days")).exists,
+        .where(date >= Sequel.cast(anchor, Date) - lookback).exists,
     )
   end
 

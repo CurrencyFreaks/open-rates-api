@@ -4,15 +4,15 @@ Sequel.migration do
   up do
     run "ALTER TABLE rates DROP COLUMN rate"
     run <<~SQL
-      ALTER TABLE rates ADD COLUMN rate REAL GENERATED ALWAYS AS (
+      ALTER TABLE rates ADD COLUMN rate double precision GENERATED ALWAYS AS (
         COALESCE(mid,
           CASE
             WHEN provider = 'BOJA' AND bid = 0 THEN ask
             WHEN bid IS NOT NULL AND ask IS NOT NULL
-              THEN CAST(printf('%.12g', (bid + ask) / 2.0) AS REAL)
+              THEN frankfurter_round_digits((bid + ask) / 2.0)
           END
         )
-      ) VIRTUAL
+      ) STORED
     SQL
   end
 

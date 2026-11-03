@@ -99,6 +99,13 @@ GEM
       afm (>= 0.2.1, < 2)
       hashery (~> 2.0)
       ttfunk
+    pg (1.7.0)
+    pg (1.7.0-aarch64-linux)
+    pg (1.7.0-aarch64-linux-musl)
+    pg (1.7.0-arm64-darwin)
+    pg (1.7.0-x86_64-darwin)
+    pg (1.7.0-x86_64-linux)
+    pg (1.7.0-x86_64-linux-musl)
     pp (0.6.4)
       prettyprint
     prettyprint (0.2.0)
@@ -174,16 +181,6 @@ GEM
       bigdecimal
       logger
       ruby-ole
-    sqlite3 (2.9.6-aarch64-linux-gnu)
-    sqlite3 (2.9.6-aarch64-linux-musl)
-    sqlite3 (2.9.6-arm-linux-gnu)
-    sqlite3 (2.9.6-arm-linux-musl)
-    sqlite3 (2.9.6-arm64-darwin)
-    sqlite3 (2.9.6-x86-linux-gnu)
-    sqlite3 (2.9.6-x86-linux-musl)
-    sqlite3 (2.9.6-x86_64-darwin)
-    sqlite3 (2.9.6-x86_64-linux-gnu)
-    sqlite3 (2.9.6-x86_64-linux-musl)
     thor (1.5.0)
     tsort (0.2.0)
     ttfunk (1.7.0)
@@ -230,6 +227,7 @@ DEPENDENCIES
   ox
   parallel_tests
   pdf-reader
+  pg
   puma
   rack-cors
   rack-test
@@ -244,7 +242,6 @@ DEPENDENCIES
   sequel
   skooma
   spreadsheet
-  sqlite3
   vcr
   webmock
 

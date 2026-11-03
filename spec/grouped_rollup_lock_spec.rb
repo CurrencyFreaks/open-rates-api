@@ -6,8 +6,8 @@ require "tmpdir"
 
 describe "Grouped maintenance writer lock" do
   it "excludes concurrent writes before reading affected source buckets" do
-    # A separate process avoids the suite's enclosing rollback transaction. Two real SQLite connections reproduce the
-    # WAL snapshot-upgrade race; a writer transaction must already exclude the second connection's insert.
+    # A separate process avoids the suite's enclosing rollback transaction. A second real connection plays a concurrent
+    # backfill: it must not get the shared write lock (WriteLock) while the rebuild reads the affected source buckets.
     script = <<~RUBY
       require "db"
       Sequel.extension(:migration)
@@ -22,31 +22,31 @@ describe "Grouped maintenance writer lock" do
       Cache.define_singleton_method(:purge) {}
       row = {provider: "ECB", date: Date.new(2024, 1, 1), base: "USD", quote: "EUR", mid: 0.8}
       DB[:rates].insert(row)
-      writer = Sequel.connect(ENV.fetch("DATABASE_URL"), after_connect: proc { |connection|
-        connection.busy_handler_timeout = 1
-      })
+      writer = Sequel.connect(ENV.fetch("DATABASE_URL"))
+      try_write = lambda do |values|
+        writer.transaction do
+          next false unless writer.get(Sequel.function(:pg_try_advisory_xact_lock, WriteLock::KEY))
+
+          writer[:rates].insert(values)
+          true
+        end
+      end
       attempted = false
       blocked = false
       logger = Object.new
       logger.define_singleton_method(:error) { |message| warn message }
       logger.define_singleton_method(:info) do |sql|
-        next if attempted || !sql.include?("SELECT") || !sql.include?("FROM `weekly_rates`")
+        next if attempted || !sql.include?("SELECT") || !sql.include?('FROM "weekly_rates"')
 
         attempted = true
-        begin
-          writer[:rates].insert(row.merge(date: Date.new(2024, 1, 2)))
-        rescue Sequel::DatabaseError => error
-          raise unless error.wrapped_exception.is_a?(SQLite3::BusyException)
-
-          blocked = true
-        end
+        blocked = !try_write.call(row.merge(date: Date.new(2024, 1, 2)))
       end
       DB.loggers << logger
       recompute = BlendedWeeklyRate.method(:refresh)
       BlendedWeeklyRate.define_singleton_method(:refresh) do |dates|
         abort "source rollups were not committed before recomputation" if writer[:weekly_rates].empty?
         # This second connection can write only after the source transaction released its lock.
-        writer[:rates].insert(row.merge(date: Date.new(2024, 1, 2)))
+        abort "write lock still held after the source transaction" unless try_write.call(row.merge(date: Date.new(2024, 1, 2)))
         recompute.call(dates)
       end
       rebuild_rollups(DB[:rates].where(provider: "ECB"), "ECB")
@@ -58,7 +58,7 @@ describe "Grouped maintenance writer lock" do
 
     Dir.mktmpdir do |dir|
       output, status = Open3.capture2e(
-        { "DATABASE_URL" => "sqlite://#{dir}/maintenance.sqlite3", "APP_ENV" => "test" },
+        { "DATABASE_URL" => TempDatabase.url(dir), "APP_ENV" => "test" },
         RbConfig.ruby, "-Ilib", "-r./boot", "-e", script,
       )
 

@@ -5,6 +5,7 @@ RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
     build-essential \
+    libpq-dev \
     libyaml-dev && \
     rm -rf /var/lib/apt/lists/*
 
@@ -24,6 +25,7 @@ RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
     curl \
+    libpq5 \
     libyaml-0-2 && \
     rm -rf /var/lib/apt/lists/*
 

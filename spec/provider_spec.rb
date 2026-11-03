@@ -372,7 +372,7 @@ describe Provider do
           provider.stub(:adapter, exclusive_adapter) { provider.backfill }
         end
 
-        _(Rate.where(provider: provider.key).min(:date)).must_equal(coverage_start.to_s)
+        _(Rate.where(provider: provider.key).min(:date).to_s).must_equal(coverage_start.to_s)
       end
 
       it "stores nothing dated before coverage_start" do
@@ -387,7 +387,7 @@ describe Provider do
           provider.stub(:adapter, stray_adapter) { provider.backfill(after: coverage_start) }
         end
 
-        _(Rate.where(provider: provider.key).min(:date)).must_equal(coverage_start.to_s)
+        _(Rate.where(provider: provider.key).min(:date).to_s).must_equal(coverage_start.to_s)
       end
     end
 

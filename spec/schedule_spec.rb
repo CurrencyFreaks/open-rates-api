@@ -6,7 +6,7 @@ require "provider/adapters"
 require "tmpdir"
 
 describe "bin/schedule --dry-run" do
-  let(:db_url) { DB.opts[:uri] || ENV["DATABASE_URL"] || "sqlite://#{Dir.pwd}/db/frankfurter_test.sqlite3" }
+  let(:db_url) { DB.opts[:uri] || ENV["DATABASE_URL"] || DB.uri }
   let(:output) do
     `DATABASE_URL=#{db_url} APP_ENV=test bundle exec ruby bin/schedule --dry-run 2>&1`
   end

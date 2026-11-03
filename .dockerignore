@@ -2,3 +2,6 @@
 Dockerfile
 spec
 db/*.sqlite3*
+compose.yaml
+.env*
+*.log

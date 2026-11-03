@@ -5,7 +5,7 @@ require "open3"
 require "tmpdir"
 
 describe "Rate component migrations" do
-  it "keeps rates readable through rollback and reapplication without a custom SQLite function" do
+  it "keeps rates readable through rollback and reapplication without a custom database function" do
     script = <<~RUBY
       require "db"
       Sequel.extension(:migration)
@@ -22,18 +22,17 @@ describe "Rate component migrations" do
         Sequel::Migrator.run(DB, "db/migrate", target: version)
         abort "wrong migration version" unless DB[:schema_info].get(:version) == version
         # A standalone connection must read the schema without application callbacks.
-        SQLite3::Database.new(ENV.fetch("SNAPSHOT_PATH")) do |connection|
-          actual = connection.execute("SELECT rate FROM rates ORDER BY quote").flatten
-          abort "rates changed at version \#{version}" unless actual == expected
-        end
+        connection = PG.connect(ENV.fetch("DATABASE_URL"))
+        actual = connection.exec("SELECT rate FROM rates ORDER BY quote").column_values(0).map(&:to_f)
+        connection.close
+        abort "rates changed at version \#{version}" unless actual == expected
       end
       DB.disconnect
     RUBY
 
     Dir.mktmpdir do |dir|
-      path = File.join(dir, "migration.sqlite3")
       output, status = Open3.capture2e(
-        { "DATABASE_URL" => "sqlite://#{path}", "SNAPSHOT_PATH" => path, "APP_ENV" => "test" },
+        { "DATABASE_URL" => TempDatabase.url(dir), "APP_ENV" => "test" },
         RbConfig.ruby, "-Ilib", "-r./boot", "-e", script,
       )
 

@@ -29,7 +29,7 @@ describe "Currency exclusions migration" do
     RUBY
     Dir.mktmpdir do |dir|
       output, status = Open3.capture2e(
-        { "DATABASE_URL" => "sqlite://#{File.join(dir, "migration.sqlite3")}", "APP_ENV" => "test" },
+        { "DATABASE_URL" => TempDatabase.url(dir), "APP_ENV" => "test" },
         RbConfig.ruby, "-Ilib", "-r./boot", "-e", script,
       )
 

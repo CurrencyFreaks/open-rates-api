@@ -16,7 +16,7 @@ describe "RBM SDR migration" do
       Cache.define_singleton_method(:purge) { raise IOError, "cache unavailable" }
     RUBY
     Dir.mktmpdir do |dir|
-      env = { "DATABASE_URL" => "sqlite://#{File.join(dir, "migration.sqlite3")}", "APP_ENV" => "test" }
+      env = { "DATABASE_URL" => TempDatabase.url(dir), "APP_ENV" => "test" }
       initialize = 'require "db"; Sequel.extension(:migration); Sequel::Migrator.run(DB, "db/migrate", target: 39)'
       output, status = Open3.capture2e(env, RbConfig.ruby, "-Ilib", "-r./boot", "-e", initialize)
 

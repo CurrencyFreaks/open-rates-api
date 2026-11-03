@@ -25,7 +25,7 @@ Sequel.migration do
         UNION ALL
         SELECT base AS iso_code, MIN(date) AS start_date, MAX(date) AS end_date
         FROM rates GROUP BY base
-      )
+      ) AS bounds
       GROUP BY iso_code
       ORDER BY iso_code
     SQL
@@ -37,7 +37,7 @@ Sequel.migration do
         SELECT DISTINCT provider, quote AS iso_code FROM rates
         UNION
         SELECT DISTINCT provider, base AS iso_code FROM rates
-      )
+      ) AS pairs
       ORDER BY provider, iso_code
     SQL
   end

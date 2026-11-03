@@ -149,9 +149,9 @@ end
       logger = Object.new
       table = source.table_name.to_s
       logger.define_singleton_method(:info) do |sql|
-        return unless sql.include?("FROM `#{table}`") && sql.include?("`bucket_date` IN")
+        return unless sql.include?(%(FROM "#{table}")) && sql.include?('"bucket_date" IN')
 
-        sizes << sql[/`bucket_date` IN \(([^)]+)\)/, 1].scan(/'\d{4}-\d{2}-\d{2}'/).size
+        sizes << sql[/"bucket_date" IN \(([^)]+)\)/, 1].scan(/'\d{4}-\d{2}-\d{2}'/).size
       end
       DB.loggers << logger
       begin
@@ -293,13 +293,13 @@ describe "Grouped blend ingestion" do
 end
 
 describe "Grouped read consistency" do
-  it "reads source coverage and stored values from the same SQLite snapshot" do
+  it "reads source coverage and stored values from the same snapshot" do
     require "tmpdir"
     Dir.mktmpdir do |dir|
-      database = Sequel.sqlite(File.join(dir, "snapshot.sqlite3"))
+      url = TempDatabase.url(dir)
+      database = Sequel.connect(url)
       writer = nil
       begin
-        database.run("PRAGMA journal_mode=WAL")
         database.create_table(:rates) do
           Date :date
           String :provider
@@ -331,11 +331,11 @@ describe "Grouped read consistency" do
         date = Date.new(2024, 1, 1)
         database[:weekly_rates].insert(bucket_date: date, provider: "ECB", base: "USD", quote: "EUR", rate: 0.8)
         model.refresh([date])
-        writer = Sequel.sqlite(File.join(dir, "snapshot.sqlite3"))
+        writer = Sequel.connect(url)
         changed = false
         logger = Object.new
         logger.define_singleton_method(:info) do |message|
-          next if changed || !message.include?("FROM `weekly_rates`")
+          next if changed || !message.include?('FROM "weekly_rates"')
 
           changed = true
           writer.transaction do
@@ -353,6 +353,8 @@ describe "Grouped read consistency" do
       ensure
         database.disconnect
         writer&.disconnect
+        Sequel::DATABASES.delete(database)
+        Sequel::DATABASES.delete(writer)
       end
     end
   end

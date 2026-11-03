@@ -29,7 +29,8 @@ module BlendedRollup
       dates = source.blendable.select(:bucket_date).distinct.order(:bucket_date).select_map(:bucket_date)
       refresh(dates.reverse)
 
-      db.transaction(**(db.in_transaction? ? {} : { mode: :immediate })) do
+      db.transaction do
+        WriteLock.acquire(db)
         dataset.exclude(bucket_date: source.blendable.select(:bucket_date)).delete
       end
     end
@@ -50,7 +51,8 @@ module BlendedRollup
     # snapshot so ingestion/rebuild cannot leave a request with a mixture of old dates and new rows. A partial build may
     # serve complete chunks immediately; every incomplete chunk stays live.
     def read(range)
-      db.transaction do
+      # REPEATABLE READ gives every statement the same snapshot, as SQLite's read transaction did.
+      db.transaction(isolation: :repeatable) do
         dates = source.blendable.between(range).select(:bucket_date).distinct.order(:bucket_date)
           .select_map(:bucket_date)
         records = dataset.where(bucket_date: dates).order(:bucket_date, :quote).naked.all
@@ -66,7 +68,8 @@ module BlendedRollup
     private
 
     def refresh_batch(buckets)
-      db.transaction(savepoint: true, **(db.in_transaction? ? {} : { mode: :immediate })) do
+      db.transaction(savepoint: true) do
+        WriteLock.acquire(db)
         rows = source.blendable.where(bucket_date: buckets).order(:bucket_date, :quote).naked.all
         rows.each { |row| row[:date] = row.delete(:bucket_date) }
         records = rows.group_by { |row| row[:date] }.flat_map do |date, contributors|

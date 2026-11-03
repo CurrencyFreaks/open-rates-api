@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "bucket"
+
 Sequel.migration do
   up do
     create_table(:weekly_rates) do
@@ -25,10 +27,7 @@ Sequel.migration do
     end
 
     # Backfill weekly_rates
-    week_num = Sequel.cast(Sequel.function(:strftime, "%W", :date), Integer)
-    day_offset = Sequel.join(["+", week_num * 7, " days"])
-    year_start = Sequel.function(:strftime, "%Y-01-01", :date)
-    week_bucket = Sequel.function(:date, Sequel.function(:strftime, "%Y-%m-%d", year_start, day_offset))
+    week_bucket = Bucket.week(:date)
 
     self[:weekly_rates].insert(
       [:bucket_date, :provider, :base, :quote, :rate],
@@ -37,7 +36,7 @@ Sequel.migration do
     )
 
     # Backfill monthly_rates
-    month_bucket = Sequel.function(:strftime, "%Y-%m-01", :date)
+    month_bucket = Bucket.month(:date)
 
     self[:monthly_rates].insert(
       [:bucket_date, :provider, :base, :quote, :rate],
