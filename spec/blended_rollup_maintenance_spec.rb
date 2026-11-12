@@ -6,7 +6,7 @@ require "blended_weekly_rate"
 require "blended_monthly_rate"
 require "rate_validation"
 
-["blend", "rollups", "db"].each { |name| load File.expand_path("../lib/tasks/#{name}.rake", __dir__) }
+["blend", "rollups", "db"].each { |name| load File.expand_path("../crawler/lib/tasks/#{name}.rake", __dir__) }
 
 describe "Grouped blend maintenance" do
   def invoke_task(name, *)

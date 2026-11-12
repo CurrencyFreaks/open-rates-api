@@ -1,6 +1,8 @@
-# Frankfurter (PostgreSQL fork) + PostgreSQL — local test setup.
+# Open Rates (PostgreSQL) — crawler + API + PostgreSQL.
 # Start:  docker compose up -d --build
 # Check:  curl -s localhost:${FRANKFURTER_PORT:-8081}/v2/rate/EUR/USD
+#
+# Order on every start: postgres (healthy) -> migrate (runs once, exits) -> crawler + api.
 
 name: frankfurter-pg
 
@@ -25,10 +27,40 @@ services:
       timeout: 5s
       retries: 5
 
-  # The app, built from this folder's Dockerfile (our own image, not the Docker Hub one).
-  frankfurter:
-    build: .
-    image: frankfurter-pg:${IMAGE_TAG:-local}
+  # One-off job: database migrations + provider seed, then it exits. Uses the crawler image (the crawler owns the schema).
+  migrate:
+    build:
+      context: .
+      dockerfile: crawler/Dockerfile
+    image: open-rates-crawler:${IMAGE_TAG:-local}
+    command: ["bundle", "exec", "rake", "db:setup"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgres://frankfurter:${POSTGRES_PASSWORD}@postgres:5432/frankfurter
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Crawler: fetches rates from providers and writes them to the database. Always exactly ONE copy.
+  crawler:
+    image: open-rates-crawler:${IMAGE_TAG:-local}
+    init: true
+    restart: unless-stopped
+    command: ["bundle", "exec", "ruby", "bin/schedule"]
+    environment:
+      DATABASE_URL: postgres://frankfurter:${POSTGRES_PASSWORD}@postgres:5432/frankfurter
+      # To purge the Cloudflare cache after new data arrives, add CLOUDFLARE_ZONE_ID and CLOUDFLARE_API_TOKEN here.
+      # Do not add them with empty values: an empty value counts as "set" and every purge would fail.
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # API: read-only HTTP endpoints. Safe to run several copies (needs a load balancer and no fixed host port).
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    image: open-rates-api:${IMAGE_TAG:-local}
     init: true
     restart: unless-stopped
     environment:
@@ -38,8 +70,8 @@ services:
       # BIND_ADDR=127.0.0.1 (default): only this machine. BIND_ADDR=0.0.0.0: open to the internet.
       - "${BIND_ADDR:-127.0.0.1}:${FRANKFURTER_PORT:-8081}:8080"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   pgdata:

@@ -5,10 +5,10 @@ require "fugit"
 require "provider/adapters"
 require "tmpdir"
 
-describe "bin/schedule --dry-run" do
+describe "crawler/bin/schedule --dry-run" do
   let(:db_url) { DB.opts[:uri] || ENV["DATABASE_URL"] || DB.uri }
   let(:output) do
-    `DATABASE_URL=#{db_url} APP_ENV=test bundle exec ruby bin/schedule --dry-run 2>&1`
+    `DATABASE_URL=#{db_url} APP_ENV=test bundle exec ruby crawler/bin/schedule --dry-run 2>&1`
   end
 
   let(:startup_lines) { output.lines.select { |l| l.start_with?("startup:") } }
@@ -47,7 +47,7 @@ describe "bin/schedule --dry-run" do
 
       File.write(File.join(dir, "rufus-scheduler.rb"), scheduler_stub)
 
-      output = `DATABASE_URL=#{db_url} APP_ENV=test bundle exec ruby -I #{dir} bin/schedule 2>&1`
+      output = `DATABASE_URL=#{db_url} APP_ENV=test bundle exec ruby -I #{dir} crawler/bin/schedule 2>&1`
 
       _($CHILD_STATUS.success?).must_equal(true, output)
       _(output.lines.map(&:chomp).grep(/\Astartup: \d+s\z/)).wont_be_empty
@@ -71,7 +71,7 @@ describe "Grouped blend startup" do
     end
     [:cron, :join].each { |method| scheduler.define_singleton_method(method) { |*| nil } }
 
-    Rufus::Scheduler.stub(:new, scheduler) { load File.expand_path("../bin/schedule", __dir__) }
+    Rufus::Scheduler.stub(:new, scheduler) { load File.expand_path("../crawler/bin/schedule", __dir__) }
     @job = Struct.new(:cancelled) do
       def unschedule = self.cancelled = true
     end.new(false)

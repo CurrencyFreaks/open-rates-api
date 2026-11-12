@@ -17,7 +17,8 @@ describe "Unknown archive codes migration" do
     RUBY
     Dir.mktmpdir do |dir|
       env = { "DATABASE_URL" => TempDatabase.url(dir), "APP_ENV" => "test" }
-      initialize = 'require "db"; Sequel.extension(:migration); Sequel::Migrator.run(DB, "db/migrate", target: 48)'
+      initialize = 'require "db"; Sequel.extension(:migration); ' \
+                   'Sequel::Migrator.run(DB, "crawler/db/migrate", target: 48)'
       output, status = Open3.capture2e(env, RbConfig.ruby, "-Ilib", "-r./boot", "-e", initialize)
 
       _(status.success?).must_equal(true, output)
@@ -68,7 +69,7 @@ describe "Unknown archive codes migration" do
       before = snapshot.call
 
       require "rake"
-      load "lib/tasks/db.rake"
+      load "crawler/lib/tasks/db.rake"
       Rake::Task["db:setup"].invoke
       abort "migration incomplete" unless DB[:schema_info].get(:version) >= 49
 
@@ -127,7 +128,7 @@ describe "Unknown archive codes migration" do
       DB[:blended_rates].insert(date: "2000-11-01", quote: "TJS", rate: 2.2)
       before = DB[:rates].order(:provider, :base).all
       begin
-        Sequel::Migrator.run(DB, "db/migrate")
+        Sequel::Migrator.run(DB, "crawler/db/migrate")
         abort "accepted conflicting components"
       rescue RuntimeError => error
         raise unless error.message.include?("conflicting ZAL/TJS components")
@@ -150,7 +151,7 @@ describe "Unknown archive codes migration" do
       ])
       DB[:blended_rates].insert(date: "2002-12-02", quote: "TJS", rate: 3.0)
       before = DB[:rates].order(:provider, :base).all
-      Sequel::Migrator.run(DB, "db/migrate")
+      Sequel::Migrator.run(DB, "crawler/db/migrate")
       abort "migration incomplete" unless DB[:schema_info].get(:version) >= 49
       abort "changed unaffected rows" unless DB[:rates].order(:provider, :base).all == before
       abort "touched the blends" unless DB[:blended_rates].count == 1

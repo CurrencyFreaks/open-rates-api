@@ -1,0 +1,4 @@
+# frozen_string_literal: true
+
+require_relative "boot"
+Dir.glob(File.expand_path("lib/tasks/*.rake", __dir__)).each { |r| import r }

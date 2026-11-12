@@ -17,7 +17,8 @@ describe "Retired currency labels migration" do
     RUBY
     Dir.mktmpdir do |dir|
       env = { "DATABASE_URL" => TempDatabase.url(dir), "APP_ENV" => "test" }
-      initialize = 'require "db"; Sequel.extension(:migration); Sequel::Migrator.run(DB, "db/migrate", target: 40)'
+      initialize = 'require "db"; Sequel.extension(:migration); ' \
+                   'Sequel::Migrator.run(DB, "crawler/db/migrate", target: 40)'
       output, status = Open3.capture2e(env, RbConfig.ruby, "-Ilib", "-r./boot", "-e", initialize)
 
       _(status.success?).must_equal(true, output)
@@ -79,7 +80,7 @@ describe "Retired currency labels migration" do
       abort "missing expired fixture" if DB[:blended_weekly_rates].where(bucket_date: expired_bucket).empty?
 
       require "rake"
-      load "lib/tasks/db.rake"
+      load "crawler/lib/tasks/db.rake"
       Rake::Task["db:setup"].invoke
       abort "migration incomplete" unless DB[:schema_info].get(:version) >= 41
 
@@ -154,7 +155,7 @@ describe "Retired currency labels migration" do
       DB[:blended_rates].insert(date: "2008-09-16", quote: "UZS", rate: 1326.38)
       before = DB[:rates].order(:base).all
       begin
-        Sequel::Migrator.run(DB, "db/migrate")
+        Sequel::Migrator.run(DB, "crawler/db/migrate")
         abort "accepted conflicting components"
       rescue RuntimeError => error
         raise unless error.message.include?("conflicting SDR/XDR components")
@@ -170,7 +171,7 @@ describe "Retired currency labels migration" do
     run_migration_script(<<~RUBY)
       DB[:rates].insert(provider: "ECB", date: "2026-01-20", base: "EUR", quote: "USD", mid: 1.17)
       DB[:blended_rates].insert(date: "2026-01-20", quote: "EUR", rate: 0.85)
-      Sequel::Migrator.run(DB, "db/migrate")
+      Sequel::Migrator.run(DB, "crawler/db/migrate")
       abort "unnecessary invalidation" unless DB[:blended_rates].count == 1
       DB.disconnect
     RUBY

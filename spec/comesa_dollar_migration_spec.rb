@@ -10,7 +10,7 @@ describe "COMESA Dollar migration" do
       require "db"
       require "bucket"
       Sequel.extension(:migration)
-      Sequel::Migrator.run(DB, "db/migrate", target: 35)
+      Sequel::Migrator.run(DB, "crawler/db/migrate", target: 35)
       DB[:providers].insert(key: "RBM", name: "Reserve Bank of Malawi", pivot_currency: "MWK", frequency: "daily")
 
       date = Date.new(2024, 1, 2)
@@ -44,9 +44,9 @@ describe "COMESA Dollar migration" do
       month = DB.get(Bucket.month(date.to_s))
       require "cache"
       Cache.define_singleton_method(:purge) { raise "Cloudflare unavailable" }
-      load "lib/tasks/db.rake"
+      load "crawler/lib/tasks/db.rake"
       Rake::Task["db:setup"].invoke
-      Sequel::Migrator.check_current(DB, "db/migrate")
+      Sequel::Migrator.check_current(DB, "crawler/db/migrate")
 
       # A second startup must also succeed while blends await the scheduler and the cache service is unavailable.
       Rake::Task.tasks.each(&:reenable)

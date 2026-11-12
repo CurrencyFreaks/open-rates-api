@@ -5,7 +5,7 @@ require "currency_patches"
 
 describe "Currency patches" do
   it "applies all patches to the Money gem" do
-    seeds = JSON.parse(File.read(File.expand_path("../db/seeds/currency_patches.json", __dir__)))
+    seeds = JSON.parse(File.read(File.expand_path("../shared/db/seeds/currency_patches.json", __dir__)))
 
     seeds.each do |entry|
       currency = Money::Currency.find(entry["iso_code"])

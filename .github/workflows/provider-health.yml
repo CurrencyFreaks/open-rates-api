@@ -2,7 +2,7 @@ name: Provider health
 
 # Daily audit for silently-frozen providers and unknown currency codes. Reads the live /v2/providers feed,
 # flags missed publishes beyond the cadence threshold or codes excluded from the catalogue, and
-# upserts a single rolling issue (labels: provider + health). See bin/provider_health.rb.
+# upserts a single rolling issue (labels: provider + health). See crawler/bin/provider_health.rb.
 
 on:
   schedule:
@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ruby/setup-ruby@26e5b7d197ebf60545ee9667bcbace0be11ccaec # v1.334.0
-      - run: ruby bin/provider_health.rb
+      - run: ruby crawler/bin/provider_health.rb
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}

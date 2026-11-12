@@ -11,13 +11,13 @@ describe "Grouped maintenance writer lock" do
     script = <<~RUBY
       require "db"
       Sequel.extension(:migration)
-      Sequel::Migrator.run(DB, "db/migrate")
+      Sequel::Migrator.run(DB, "crawler/db/migrate")
       require "provider"
       require "blended_weekly_rate"
       require "blended_monthly_rate"
       require "cache"
       require "rake"
-      load "lib/tasks/rollups.rake"
+      load "crawler/lib/tasks/rollups.rake"
       Provider.seed
       Cache.define_singleton_method(:purge) {}
       row = {provider: "ECB", date: Date.new(2024, 1, 1), base: "USD", quote: "EUR", mid: 0.8}

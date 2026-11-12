@@ -9,7 +9,7 @@ describe "Rate component migrations" do
     script = <<~RUBY
       require "db"
       Sequel.extension(:migration)
-      Sequel::Migrator.run(DB, "db/migrate")
+      Sequel::Migrator.run(DB, "crawler/db/migrate")
       identity = {provider: "TST", date: Date.new(2026, 9, 1), base: "USD"}
       DB[:rates].multi_insert([
         identity.merge(quote: "EUR", mid: 100, bid: 99, ask: 103),
@@ -19,7 +19,7 @@ describe "Rate component migrations" do
       expected = DB[:rates].order(:quote).select_map(:rate)
 
       [32, 30, 33].each do |version|
-        Sequel::Migrator.run(DB, "db/migrate", target: version)
+        Sequel::Migrator.run(DB, "crawler/db/migrate", target: version)
         abort "wrong migration version" unless DB[:schema_info].get(:version) == version
         # A standalone connection must read the schema without application callbacks.
         connection = PG.connect(ENV.fetch("DATABASE_URL"))

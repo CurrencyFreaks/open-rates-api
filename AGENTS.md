@@ -18,9 +18,22 @@ bundle exec rake blend:parity         # Verify table vs live blend query parity
 bundle exec rake rollups:rebuild      # Rebuild weekly and monthly rollups
 
 # Local server
-bundle exec puma -C config/puma.rb    # Web server on :8080
-bundle exec foreman start             # Web + scheduler (mirrors prod)
+(cd api && bundle exec puma -C config/puma.rb) # Web server on :8080
+bundle exec foreman start             # Web + scheduler (both apps, from the repo root)
 ```
+
+Run every command above from the repository root: the root `Rakefile` and `boot.rb` load both apps.
+
+## Repository Layout
+
+Two deployable apps that share one codebase folder. One `Gemfile`/`Gemfile.lock` at the root serves all three.
+
+- `shared/` — not an app; code both apps load: models (`Rate`, `Blended*`, `Provider`, `Currency`), the blend engine (`Blender`, `Consensus`, `CarryForward`, `PegAnchor`), the adapter base class, and `db/seeds/` (providers, pegs, currency JSON). `shared/boot.rb` puts `shared/lib` on the load path.
+- `crawler/` — the only writer. `bin/schedule`, provider adapters (`lib/provider/adapters/`), rake tasks for setup/backfill/rebuilds, and `db/migrate/` (the crawler owns the schema). Image: `crawler/Dockerfile`. Run exactly one copy.
+- `api/` — read-only HTTP (`config.ru`, `lib/app.rb`, `lib/versions/`, `lib/public/`, `rake blend:parity`). Image: `api/Dockerfile`. Can run many copies.
+- `spec/`, `tasks/` (test, rubocop, default), `rubocop/` — development only, run from the root.
+
+Both Dockerfiles build from the repository root (`docker build -f api/Dockerfile .`) so they can copy `shared/`. A new provider = adapter in `crawler/lib/provider/adapters/` + JSON in `shared/db/seeds/providers/`. A new endpoint = `api/` only. A change in `shared/` needs both images rebuilt (crawler first).
 
 Separate SQLite databases per environment (`APP_ENV`). Minitest suite with VCR/WebMock and transactional rollback.
 
@@ -28,9 +41,9 @@ Separate SQLite databases per environment (`APP_ENV`). Minitest suite with VCR/W
 
 - **Pipeline:** Native provider rates, less one-day spikes (`RateSpike`), rebase to USD pivot (`BaseConversion`), outlier-screened (`Consensus`), recency-decay weighted (`WeightedAverage`), and peg-anchored (`PegAnchor`).
 - **Materialized Blends:** Sparse tables (`blended_rates`, `blended_weekly_rates`, `blended_monthly_rates`) store precomputed USD blends. Plain V2 queries hit these tables directly; missing buckets or filtered queries fall back to live computation.
-- **APIs:** Legacy V1 (ECB-only) and V2 (multi-provider/blended) mounted in `lib/app.rb`. OpenAPI specs at `lib/public/v1/openapi.json` and `lib/public/v2/openapi.json`.
-- **Provider Ingestion:** Scheduled in `bin/schedule` via cron expressions in `db/seeds/providers/*.json`. Adapters (`lib/provider/adapters/`) handle pure fetch and parse. Use `midpoint(buy, sell)` for bid/ask sources to avoid float noise.
-- **Currency Patches:** Historical currencies and name overrides are configured in `db/seeds/currency_patches.json` and loaded via `lib/currency_patches.rb`.
+- **APIs:** Legacy V1 (ECB-only) and V2 (multi-provider/blended) mounted in `api/lib/app.rb`. OpenAPI specs at `api/lib/public/v1/openapi.json` and `api/lib/public/v2/openapi.json`.
+- **Provider Ingestion:** Scheduled in `crawler/bin/schedule` via cron expressions in `shared/db/seeds/providers/*.json`. Adapters (`crawler/lib/provider/adapters/`) handle pure fetch and parse. Use `midpoint(buy, sell)` for bid/ask sources to avoid float noise.
+- **Currency Patches:** Historical currencies and name overrides are configured in `shared/db/seeds/currency_patches.json` and loaded via `shared/lib/currency_patches.rb`.
 
 ## Replacing Provider History
 

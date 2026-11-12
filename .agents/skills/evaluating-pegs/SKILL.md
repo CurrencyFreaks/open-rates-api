@@ -1,15 +1,15 @@
 ---
 name: evaluating-pegs
-description: Use when adding, evaluating, or removing an entry in db/seeds/pegs/, when the user mentions a pegged or fixed currency, or when an issue suggests we should "pin" or "lock" a currency to another. Also use when deciding whether to filter or override provider rates based on an assumed peg.
+description: Use when adding, evaluating, or removing an entry in shared/db/seeds/pegs/, when the user mentions a pegged or fixed currency, or when an issue suggests we should "pin" or "lock" a currency to another. Also use when deciding whether to filter or override provider rates based on an assumed peg.
 ---
 
 # Pegs Policy
 
-The bar for entries in `db/seeds/pegs/`. These definitions directly affect blend calculations, and this skill defines what qualifies and what doesn't.
+The bar for entries in `shared/db/seeds/pegs/`. These definitions directly affect blend calculations, and this skill defines what qualifies and what doesn't.
 
 ## The Bar
 
-A currency belongs in `db/seeds/pegs/` only if **all** of the following are true:
+A currency belongs in `shared/db/seeds/pegs/` only if **all** of the following are true:
 
 1. **Officially asserted** by an issuing authority (central bank, monetary authority, currency board, or government).
 2. **Currently in force** — not historical. If a peg ended, remove the entry; don't keep it with a sunset date.
@@ -28,7 +28,7 @@ If any one of these fails, the currency does **not** belong in the file.
 
 ## Schema
 
-Each entry in `db/seeds/pegs/`:
+Each entry in `shared/db/seeds/pegs/`:
 
 ```json
 {
@@ -41,7 +41,7 @@ Each entry in `db/seeds/pegs/`:
 }
 ```
 
-All six fields are required (enforced by `Peg = Data.define(...)` in `lib/peg.rb`):
+All six fields are required (enforced by `Peg = Data.define(...)` in `shared/lib/peg.rb`):
 
 - `quote` — the pegged currency (ISO 4217)
 - `base` — what it's pegged to (ISO 4217)
@@ -54,7 +54,7 @@ All six fields are required (enforced by `Peg = Data.define(...)` in `lib/peg.rb
 
 1. **Find the primary source.** Search the central bank or monetary authority's website. Look for "exchange rate policy," "monetary policy," or "currency arrangement." If only Wikipedia turns up something, check whether the bank's own site mentions it elsewhere — sometimes the peg is buried under a different title.
 2. **Confirm the rate is current.** Some pages cite historical rates that have since been revised (e.g., Saudi riyal has had multiple regimes; the current peg dates to 1986). Match `since` to the current peg, not the original one.
-3. **Add to `db/seeds/pegs/`** as `<quote>.json` (lowercase, e.g. `aed.json`).
+3. **Add to `shared/db/seeds/pegs/`** as `<quote>.json` (lowercase, e.g. `aed.json`).
 4. **No code changes needed** — `Peg.all` auto-discovers files in the directory.
 5. **Add a test case** to `spec/peg_spec.rb` if the entry has unusual structure (non-1 rate, non-USD base, etc.) — for parity USD pegs, the existing tests cover it.
 
@@ -68,8 +68,8 @@ If you discover an entry that doesn't meet the bar (a de facto peg slipped in), 
 
 Pegs are treated as a source of rate data alongside providers. They contribute when the caller has not restricted the source set via `?providers=`. Two places in the codebase consume the peg files:
 
-1. **`Currency.find` / `Currency.all`** (lib/currency.rb) — synthesizes a currency record for pegged currencies that have no provider coverage of their own (e.g., FKP). Without a peg, these would not appear in `/v2/currencies`.
-2. **`PegAnchor`** (lib/peg_anchor.rb) — wraps `Blender` and applies all peg behavior in one place. It substitutes the peg rate for pegged quotes (matched-base or cross-base via the peg's base as a bridge), synthesizes rows for pegged currencies that providers do not cover, and rebases output to the user's base when the request base is itself pegged.
+1. **`Currency.find` / `Currency.all`** (shared/lib/currency.rb) — synthesizes a currency record for pegged currencies that have no provider coverage of their own (e.g., FKP). Without a peg, these would not appear in `/v2/currencies`.
+2. **`PegAnchor`** (shared/lib/peg_anchor.rb) — wraps `Blender` and applies all peg behavior in one place. It substitutes the peg rate for pegged quotes (matched-base or cross-base via the peg's base as a bridge), synthesizes rows for pegged currencies that providers do not cover, and rebases output to the user's base when the request base is itself pegged.
 
 Cross-base requests like `?base=EUR&quotes=AED` are anchored through the peg's base: the result is `blended(EUR/USD) × peg(USD→AED)` rather than `blended(EUR/AED)`. This removes provider-disagreement noise on quantities the issuing authority has fixed.
 
@@ -79,10 +79,10 @@ When the caller scopes via `?providers=`, `RateQuery` bypasses `PegAnchor` and u
 
 Frankfurter's editorial principle is **surface uncertainty, don't impose judgement**. Adding a de facto peg means we'd be asserting a peg that the issuing authority has not. If that peg breaks, we'd be the source of stale or wrong data — not because a provider got it wrong, but because we decided what reality looked like.
 
-The bar exists so that anything in `db/seeds/pegs/` is defensible by appeal to a primary source. If a user asks "why does Frankfurter say AED is exactly 3.6725?", the answer is "because the Central Bank of the UAE says so" — not "because we observed it was usually that."
+The bar exists so that anything in `shared/db/seeds/pegs/` is defensible by appeal to a primary source. If a user asks "why does Frankfurter say AED is exactly 3.6725?", the answer is "because the Central Bank of the UAE says so" — not "because we observed it was usually that."
 
 ## Reference: Currently Listed Pegs
 
-All entries in `db/seeds/pegs/` are GCC dollar pegs, GBP-area dependencies, USD-area dependencies (Caribbean), or escudo/INR/HKD pegs with treaty backing. There are no de facto pegs in the directory.
+All entries in `shared/db/seeds/pegs/` are GCC dollar pegs, GBP-area dependencies, USD-area dependencies (Caribbean), or escudo/INR/HKD pegs with treaty backing. There are no de facto pegs in the directory.
 
 If you propose an addition, check that it fits one of these established categories or has a comparably strong source.

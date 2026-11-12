@@ -17,7 +17,8 @@ describe "BOTA SDR migration" do
     RUBY
     Dir.mktmpdir do |dir|
       env = { "DATABASE_URL" => TempDatabase.url(dir), "APP_ENV" => "test" }
-      initialize = 'require "db"; Sequel.extension(:migration); Sequel::Migrator.run(DB, "db/migrate", target: 35)'
+      initialize = 'require "db"; Sequel.extension(:migration); ' \
+                   'Sequel::Migrator.run(DB, "crawler/db/migrate", target: 35)'
       output, status = Open3.capture2e(env, RbConfig.ruby, "-Ilib", "-r./boot", "-e", initialize)
 
       _(status.success?).must_equal(true, output)
@@ -68,7 +69,7 @@ describe "BOTA SDR migration" do
       unaffected = DB[:blended_weekly_rates].where(bucket_date: unaffected_bucket).all
       abort "missing unaffected fixture" if unaffected.empty?
       require "rake"
-      load "lib/tasks/db.rake"
+      load "crawler/lib/tasks/db.rake"
       Rake::Task["db:setup"].invoke
       abort "migration incomplete" unless DB[:schema_info].get(:version) >= 36
       abort "changed native observations" unless DB[:rates].order(:provider, :date, :base, :quote).all == expected
@@ -117,7 +118,7 @@ describe "BOTA SDR migration" do
       DB[:blended_rates].insert(date: "2026-01-01", quote: "TZS", rate: 2500)
       before = DB[:rates].order(:date, :base).all
       begin
-        Sequel::Migrator.run(DB, "db/migrate")
+        Sequel::Migrator.run(DB, "crawler/db/migrate")
         abort "accepted conflicting components"
       rescue RuntimeError => error
         raise unless error.message.include?("conflicting SDR/XDR components")
@@ -132,7 +133,7 @@ describe "BOTA SDR migration" do
   it "leaves databases without BOTA SDR history alone" do
     run_migration_script(<<~RUBY)
       DB[:blended_rates].insert(date: "2026-01-01", quote: "TZS", rate: 2500)
-      Sequel::Migrator.run(DB, "db/migrate")
+      Sequel::Migrator.run(DB, "crawler/db/migrate")
       abort "unnecessary invalidation" unless DB[:blended_rates].count == 1
       DB.disconnect
     RUBY

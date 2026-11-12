@@ -17,7 +17,8 @@ describe "Belarusian rubles migration" do
     RUBY
     Dir.mktmpdir do |dir|
       env = { "DATABASE_URL" => TempDatabase.url(dir), "APP_ENV" => "test" }
-      initialize = 'require "db"; Sequel.extension(:migration); Sequel::Migrator.run(DB, "db/migrate", target: 46)'
+      initialize = 'require "db"; Sequel.extension(:migration); ' \
+                   'Sequel::Migrator.run(DB, "crawler/db/migrate", target: 46)'
       output, status = Open3.capture2e(env, RbConfig.ruby, "-Ilib", "-r./boot", "-e", initialize)
 
       _(status.success?).must_equal(true, output)
@@ -56,7 +57,7 @@ describe "Belarusian rubles migration" do
       before = snapshot.call
 
       require "rake"
-      load "lib/tasks/db.rake"
+      load "crawler/lib/tasks/db.rake"
       Rake::Task["db:setup"].invoke
       abort "migration incomplete" unless DB[:schema_info].get(:version) >= 47
 
@@ -107,7 +108,7 @@ describe "Belarusian rubles migration" do
       DB[:blended_rates].insert(date: "2016-01-08", quote: "BYN", rate: 18_600.0)
       before = DB[:rates].order(:provider, :base).all
       begin
-        Sequel::Migrator.run(DB, "db/migrate")
+        Sequel::Migrator.run(DB, "crawler/db/migrate")
         abort "accepted conflicting components"
       rescue RuntimeError => error
         raise unless error.message.include?("conflicting BYN/BYR components")
@@ -128,7 +129,7 @@ describe "Belarusian rubles migration" do
       ])
       DB[:blended_rates].insert(date: "2016-07-04", quote: "BYN", rate: 2.0)
       before = DB[:rates].order(:provider).all
-      Sequel::Migrator.run(DB, "db/migrate")
+      Sequel::Migrator.run(DB, "crawler/db/migrate")
       abort "migration incomplete" unless DB[:schema_info].get(:version) >= 47
       abort "changed unaffected rows" unless DB[:rates].order(:provider).all == before
       abort "touched the blends" unless DB[:blended_rates].count == 1

@@ -26,6 +26,16 @@ first date its base bridge exists. The bounds do not extend history into future 
 can answer them. Multiple quotes use the rates endpoint's semantics: any matching pair suffices. No queryable pair
 returns null bounds. Coverage accepts only `base`, `quotes`, and `providers`.
 
+## Repository layout
+
+```
+shared/   code both apps use (models, blend engine, pegs, seeds) — not deployed on its own
+crawler/  fetches rates and writes them to PostgreSQL (crawler/Dockerfile, run one copy)
+api/      read-only HTTP endpoints (api/Dockerfile, scale freely)
+```
+
+`docker compose up -d --build` starts PostgreSQL, runs migrations once, then the crawler and the API.
+
 ## Deployment
 
 The public API runs at <https://api.frankfurter.dev>. If you prefer to host your own instance, you can run Frankfurter with Docker.

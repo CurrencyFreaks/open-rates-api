@@ -44,16 +44,16 @@ A takedown request is handled like any other provider loss: remove the adapter, 
 
 ## Implementation Checklist
 
-### 1. Adapter class — `lib/provider/adapters/<key>.rb`
+### 1. Adapter class — `crawler/lib/provider/adapters/<key>.rb`
 
-Inherit from `Provider::Adapters::Adapter`. See any existing adapter for the pattern (e.g. `lib/provider/adapters/boi.rb`).
+Inherit from `Provider::Adapters::Adapter`. See any existing adapter for the pattern (e.g. `crawler/lib/provider/adapters/boi.rb`).
 
 Required:
 - `fetch(after: nil, upto: nil)` — fetches from the source API, returns an array of records
 - Each record: `{ date:, base:, quote:, rate: }` (no `provider:` — the Provider model stamps that during import)
 - **Rate direction**: match the provider's native convention. `pivot_currency` may appear as either `base` or `quote` depending on the source — don't invert.
-  - ECB publishes `1 EUR = X foreign`, pivot EUR goes in `base` (see `lib/provider/adapters/ecb.rb`).
-  - NBG and BBK publish `1 foreign = X pivot`, pivot goes in `quote` (see `lib/provider/adapters/nbg.rb` and `lib/provider/adapters/bbk.rb`).
+  - ECB publishes `1 EUR = X foreign`, pivot EUR goes in `base` (see `crawler/lib/provider/adapters/ecb.rb`).
+  - NBG and BBK publish `1 foreign = X pivot`, pivot goes in `quote` (see `crawler/lib/provider/adapters/nbg.rb` and `crawler/lib/provider/adapters/bbk.rb`).
   - Store what the provider returns. Inverting in the adapter invites direction bugs and diverges from the blender's expectations.
   - **Direction is per row, not per provider.** A single feed may mix both orientations, and that is fine: record each row as published rather than normalizing the odd ones to match the majority. SARB quotes USD, GBP and EUR as ZAR-per-foreign but everything else as foreign-per-ZAR; CBK publishes KES-per-foreign except for its East African cross rates; FRED and CBC carry a per-series `[quote, base]` map. `BaseConversion` inverts and cross-converts at query time, and `RateScopes` matches the pivot on either side, so nothing downstream needs a uniform orientation.
   - Normalizing costs real precision. `1/x` almost never terminates, so inverting at ingest turns an exact published figure into a repeating decimal and stores it. It also defeats the passthrough contract in `RateQuery#emit_records`, which echoes stored digits for pairs the provider published and rounds everything else: the stored orientation *is* the provenance, so a computed reciprocal stored as a row inherits echo privileges it has not earned.
@@ -70,14 +70,14 @@ Notes:
 - Handle unit multipliers (per-100, per-1000) by dividing to normalize to per-1-unit rates. Guard against zero units before dividing.
 - If the source publishes buy and sell prices instead of a reference rate, coerce them with the base class's `midpoint(buy, sell)`, not `(buy + sell) / 2.0`. The mid is our own synthesis, so it has no published digits to echo, and float arithmetic leaves noise in the low ones that single-provider responses show verbatim (#579).
 - **Do not rescue errors** — let HTTP errors, timeouts, parse failures, and other exceptions bubble up. The scheduler handles retries; swallowing errors silently hides broken providers.
-- **Per-day APIs**: Some APIs only return rates for a single date per request. A full backfill from e.g. 2000 means ~6,800 requests. Use `backfill_range` to chunk into small windows (e.g. 30 days) and add a `sleep` between requests to be polite. The base class `fetch_each` handles the iteration loop. See `lib/provider/adapters/nbg.rb` for a working example.
+- **Per-day APIs**: Some APIs only return rates for a single date per request. A full backfill from e.g. 2000 means ~6,800 requests. Use `backfill_range` to chunk into small windows (e.g. 30 days) and add a `sleep` between requests to be polite. The base class `fetch_each` handles the iteration loop. See `crawler/lib/provider/adapters/nbg.rb` for a working example.
 
 #### The `http` client
 
 The base class provides a private `http` method (an `HTTP::Client` from the `http` gem): call `http.get(url)` or `http.post(url, ...)` rather than reaching for `Net::HTTP` or another client. It's pre-configured with a `User-Agent`, connect/write/read timeouts, and retriable 429s (Retry-After is honored automatically, so adapters never need to handle rate limiting themselves).
 
 - **Non-2xx raises.** Any response outside the 2xx range raises `HTTP::StatusError`, including redirects to a moved or retired page. There's no silent empty-array fallback: a bad response must fail the fetch, not look like a genuine no-data day.
-- **Tolerate specific statuses at the call site**, not by rescuing broadly. See `lib/provider/adapters/nbp.rb`, which expects 404 for date ranges with no working days:
+- **Tolerate specific statuses at the call site**, not by rescuing broadly. See `crawler/lib/provider/adapters/nbp.rb`, which expects 404 for date ranges with no working days:
   ```ruby
   def fetch_rates(table_url, start_date, end_date)
     parse(http.get("#{table_url}/#{start_date}/#{end_date}/?format=json").to_s)
@@ -87,19 +87,19 @@ The base class provides a private `http` method (an `HTTP::Client` from the `htt
     []
   end
   ```
-- **Semantic failures** (the response is 200 but doesn't contain what the adapter expects: a missing download link, an empty workbook) raise `RuntimeError` with a message that names the provider and what went wrong, e.g. `raise "no workbook link on #{DATA_URL}"` (see `lib/provider/adapters/cbs.rb`).
+- **Semantic failures** (the response is 200 but doesn't contain what the adapter expects: a missing download link, an empty workbook) raise `RuntimeError` with a message that names the provider and what went wrong, e.g. `raise "no workbook link on #{DATA_URL}"` (see `crawler/lib/provider/adapters/cbs.rb`).
 - **Timeouts**: the shared client sets connect 10s, write 60s, read 120s. The read deadline is per socket read (it resets on every chunk), so slow-but-steady downloads never trip it; only a server silent for over two minutes does. No per-adapter tuning.
 - **Exotic patterns**: reach for these only when a provider needs them:
-  - Custom TLS trust: pass a per-request `ssl_context` (see `lib/provider/adapters/boa.rb`, `rbv.rb`).
-  - `http.persistent(BASE_URL) { |client| ... }` for endpoints that misbehave across separate connections, or where you want exact parity with a legacy single-connection flow (see `lib/provider/adapters/bota.rb`).
-  - Cookie-based login legs: read `response.headers.get("Set-Cookie")` off the first response and forward it on the next request (see `lib/provider/adapters/cbe.rb`, `mas.rb`, `bi.rb`, `nbc.rb`).
+  - Custom TLS trust: pass a per-request `ssl_context` (see `crawler/lib/provider/adapters/boa.rb`, `rbv.rb`).
+  - `http.persistent(BASE_URL) { |client| ... }` for endpoints that misbehave across separate connections, or where you want exact parity with a legacy single-connection flow (see `crawler/lib/provider/adapters/bota.rb`).
+  - Cookie-based login legs: read `response.headers.get("Set-Cookie")` off the first response and forward it on the next request (see `crawler/lib/provider/adapters/cbe.rb`, `mas.rb`, `bi.rb`, `nbc.rb`).
 
 #### Redenominated and relabelled currencies
 
 Archives often label a currency's whole history with its current ISO code. Before trusting a code, dump one file per year and look for a 1000x-plus jump in a value at a known redenomination date. Two flavours, handled differently:
 
 - **Restated series.** The source converted old values into the successor unit. ECB and TCMB publish pre-2005 TRY as TRL divided by a million, so 2004 reads `EUR/TRY 1.829`. Relay as published: it is what the issuing bank itself reports, and the series is continuous.
-- **Relabelled only.** The values are the predecessor's magnitudes under the successor code. CBAR's 2005-12-30 file quotes `1 USD = 4593 "AZN"`, old manat; LB's AZN series is the same. Map the code back to the predecessor by date in the adapter with a `PREDECESSORS` table (see `lib/provider/adapters/cbar.rb`, `lb.rb`):
+- **Relabelled only.** The values are the predecessor's magnitudes under the successor code. CBAR's 2005-12-30 file quotes `1 USD = 4593 "AZN"`, old manat; LB's AZN series is the same. Map the code back to the predecessor by date in the adapter with a `PREDECESSORS` table (see `crawler/lib/provider/adapters/cbar.rb`, `lb.rb`):
   ```ruby
   PREDECESSORS = { "AZN" => ["AZM", Date.new(2006, 1, 9)] }.freeze
   ```
@@ -109,8 +109,8 @@ Two more things the relabel needs:
 
 Current databases also have `blended_weekly_rates` and `blended_monthly_rates`. For new repair migrations, invalidate complete affected grouped buckets in the same transaction as provider rollup changes, including old bucket dates that disappear. Startup population or a subsequent `rake blend:rebuild` fills the gaps. Insert-driven refresh cannot repair omitted dates. Follow `AGENTS.md`'s "Replacing provider history" procedure for delete-and-refetch repairs; do not delete only the three provider tables.
 
-- `db/seeds/currency_patches.json` must know the predecessor for it to enter the blend and catalogue. Unknown codes are stored and served by provider routes, and provider health flags them. The Money gem lacks some historical codes (AZM, RUR); add a full entry.
-- Rows already stored under the wrong code stay put: the insert is `ON CONFLICT DO NOTHING` and the corrected rows have a different key. Relabel them in place with a migration (see `db/migrate/027_relabel_lb_old_manat.rb`), which runs itself at container start. No re-backfill: the values were right, only the code was wrong. The migration has four parts, because three tables derive from `rates`:
+- `shared/db/seeds/currency_patches.json` must know the predecessor for it to enter the blend and catalogue. Unknown codes are stored and served by provider routes, and provider health flags them. The Money gem lacks some historical codes (AZM, RUR); add a full entry.
+- Rows already stored under the wrong code stay put: the insert is `ON CONFLICT DO NOTHING` and the corrected rows have a different key. Relabel them in place with a migration (see `crawler/db/migrate/027_relabel_lb_old_manat.rb`), which runs itself at container start. No re-backfill: the values were right, only the code was wrong. The migration has four parts, because three tables derive from `rates`:
   1. `UPDATE rates` scoped to provider, code and date range.
   2. Rollups: delete the provider's `weekly_rates` and `monthly_rates` for both codes and re-insert from `rates` with `Bucket.week` / `Bucket.month`, the way `Provider#refresh_rollup` does. A bucket straddling the cutover holds both codes.
   3. Summaries: `currencies` and `currency_coverages` only ever widen on insert, so recompute both codes from `rates`.
@@ -118,7 +118,7 @@ Current databases also have `blended_weekly_rates` and `blended_monthly_rates`. 
 
   Verify against a prod backup: apply the migration to a copy, recompute the blend from scratch over the affected years on a second copy, and diff `blended_rates`. Zero rows either way, or the migration is wrong.
 
-`db/seeds/nascent_currencies.json` applies globally, including restated series, so it is reserved for universal relabels such as pre-1999 EUR to XEU. Before inception, ingestion uses the configured predecessor and drops the row only if none is known. Keep provider-specific switch dates in the adapter.
+`shared/db/seeds/nascent_currencies.json` applies globally, including restated series, so it is reserved for universal relabels such as pre-1999 EUR to XEU. Before inception, ingestion uses the configured predecessor and drops the row only if none is known. Keep provider-specific switch dates in the adapter.
 
 Non-ISO labels (`SDR` for XDR) go through an `ALIASES` map rather than the predecessor table.
 
@@ -135,11 +135,11 @@ VCR cassettes (`spec/vcr_cassettes/<key>.yml`) are auto-created on the first liv
 
 **Avoiding time bombs**: Always pass explicit `upto:` dates in tests, even when the provider defaults to `Date.today`. If `upto` is omitted, the fetch will reach into unrecorded months and hit VCR errors on the 1st of the next month. Similarly, avoid assertions with hardcoded bounds on date counts (e.g. `<= 13` months) that break at month boundaries.
 
-### 3. Seed provider metadata — `db/seeds/providers/<key>.json`
+### 3. Seed provider metadata — `shared/db/seeds/providers/<key>.json`
 
 Create a single JSON file (not an array) with: `key`, `name`, `description`, `pivot_currency`, `data_url`, `terms_url` (nullable), `publish_schedule` (5-field cron expression in UTC, e.g. `"*/30 14-16 * * 1-5"` for daily Mon-Fri with a 3-hour polling window starting at 14:00 UTC; `null` for providers without a recurring cadence), `publish_cadence` (one of `"daily"`, `"weekly"`, `"monthly"`, or `null` for historical-only providers; dispatches `publishes_missed` to the right algorithm — per-fire-day count for daily, ISO-week bucket for weekly, year-month bucket for monthly), `coverage_start` (earliest date for historical data, or null if unknown). Each provider has its own file — no shared file to conflict on.
 
-The adapter class is auto-discovered from `lib/provider/adapters/` — no need to edit any wiring files.
+The adapter class is auto-discovered from `crawler/lib/provider/adapters/` — no need to edit any wiring files.
 
 ### 4. Verify
 

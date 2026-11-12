@@ -5,7 +5,7 @@ require_relative "helper"
 
 describe "Database connection configuration" do
   def database_name(env)
-    `#{env} bundle exec ruby -Ilib -e 'require "db"; puts DB.opts[:database]'`.strip
+    `#{env} bundle exec ruby -Ishared/lib -e 'require "db"; puts DB.opts[:database]'`.strip
   end
 
   it "appends TEST_ENV_NUMBER to test database name when set" do
@@ -27,7 +27,7 @@ describe "Database connection configuration" do
   end
 
   it "refuses a non-PostgreSQL DATABASE_URL" do
-    output = `DATABASE_URL=sqlite://custom.sqlite3 bundle exec ruby -Ilib -e 'require "db"' 2>&1`
+    output = `DATABASE_URL=sqlite://custom.sqlite3 bundle exec ruby -Ishared/lib -e 'require "db"' 2>&1`
 
     _($CHILD_STATUS.success?).must_equal(false)
     _(output).must_include("uses PostgreSQL")

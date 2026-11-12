@@ -20,7 +20,7 @@ describe Provider do
 
     it "seeds every provider with publish_schedule, publish_cadence, and valid cron" do
       require "fugit"
-      dir = File.expand_path("../db/seeds/providers", __dir__)
+      dir = File.expand_path("../shared/db/seeds/providers", __dir__)
       Dir["#{dir}/*.json"].each do |path|
         data = JSON.parse(File.read(path))
 

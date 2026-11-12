@@ -1,2 +1,2 @@
-web: bundle exec puma -C config/puma.rb
-scheduler: bundle exec ruby bin/schedule
+web: cd api && bundle exec puma -C config/puma.rb
+scheduler: cd crawler && bundle exec ruby bin/schedule

@@ -2,7 +2,7 @@
 
 require_relative "helper"
 require "rake"
-load File.expand_path("../lib/tasks/providers.rake", __dir__)
+load File.expand_path("../crawler/lib/tasks/providers.rake", __dir__)
 
 describe "Backfill task" do
   def invoke_backfill(*)

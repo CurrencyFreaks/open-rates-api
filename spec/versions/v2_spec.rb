@@ -13,7 +13,7 @@ require "versions/v2"
 describe Versions::V2 do
   include Rack::Test::Methods
   include Skooma::Minitest[
-    File.expand_path("../../lib/public/v2/openapi.json", __dir__),
+    File.expand_path("../../api/lib/public/v2/openapi.json", __dir__),
   ]
 
   let(:app) { Versions::V2.freeze }
