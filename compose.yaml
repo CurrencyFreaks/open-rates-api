@@ -1,32 +1,16 @@
-# Open Rates (PostgreSQL) — crawler + API + PostgreSQL.
+# Open Rates — crawler + API. The database is an external PostgreSQL server (no database container).
 # Start:  docker compose up -d --build
 # Check:  curl -s localhost:${FRANKFURTER_PORT:-8081}/v2/rate/EUR/USD
 #
-# Order on every start: postgres (healthy) -> migrate (runs once, exits) -> crawler + api.
+# Order on every start: migrate (runs once, exits) -> crawler + api.
+#
+# DATABASE_URL in .env decides which database is used (required):
+#   laptop:     postgres://USER:PASSWORD@HOST:5432/currency_provider_data_dev
+#   production: postgres://USER:PASSWORD@HOST:5432/currency_provider_data
 
 name: frankfurter-pg
 
 services:
-  # Database. Data lives in the named volume "pgdata", so it survives "docker compose down".
-  postgres:
-    image: postgres:${POSTGRES_VERSION:-18}
-    restart: unless-stopped
-    shm_size: 256mb
-    environment:
-      POSTGRES_USER: frankfurter
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: frankfurter
-    volumes:
-      - pgdata:/var/lib/postgresql
-    ports:
-      # Only reachable from this machine (for psql / pgAdmin). Change PG_PORT if 5432 is busy.
-      - "127.0.0.1:${PG_PORT:-5433}:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U frankfurter -d frankfurter"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   # One-off job: database migrations + provider seed, then it exits. Uses the crawler image (the crawler owns the schema).
   migrate:
     build:
@@ -36,19 +20,16 @@ services:
     command: ["bundle", "exec", "rake", "db:setup"]
     restart: "no"
     environment:
-      DATABASE_URL: postgres://frankfurter:${POSTGRES_PASSWORD}@postgres:5432/frankfurter
-    depends_on:
-      postgres:
-        condition: service_healthy
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
 
-  # Crawler: fetches rates from providers and writes them to the database. Always exactly ONE copy.
+  # Crawler: fetches rates from providers and writes them to the database. Always exactly ONE copy per database.
   crawler:
     image: open-rates-crawler:${IMAGE_TAG:-local}
     init: true
     restart: unless-stopped
     command: ["bundle", "exec", "ruby", "bin/schedule"]
     environment:
-      DATABASE_URL: postgres://frankfurter:${POSTGRES_PASSWORD}@postgres:5432/frankfurter
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
       # To purge the Cloudflare cache after new data arrives, add CLOUDFLARE_ZONE_ID and CLOUDFLARE_API_TOKEN here.
       # Do not add them with empty values: an empty value counts as "set" and every purge would fail.
     depends_on:
@@ -64,7 +45,7 @@ services:
     init: true
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgres://frankfurter:${POSTGRES_PASSWORD}@postgres:5432/frankfurter
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
       WORKER_PROCESSES: ${WORKER_PROCESSES:-2}
     ports:
       # BIND_ADDR=127.0.0.1 (default): only this machine. BIND_ADDR=0.0.0.0: open to the internet.
@@ -72,6 +53,3 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-
-volumes:
-  pgdata:

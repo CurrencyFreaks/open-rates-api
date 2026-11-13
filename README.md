@@ -34,7 +34,7 @@ crawler/  fetches rates and writes them to PostgreSQL (crawler/Dockerfile, run o
 api/      read-only HTTP endpoints (api/Dockerfile, scale freely)
 ```
 
-`docker compose up -d --build` starts PostgreSQL, runs migrations once, then the crawler and the API.
+`docker compose up -d --build` runs migrations once, then the crawler and the API. The database is an external PostgreSQL server chosen by `DATABASE_URL` in `.env` (see `.env.example`).
 
 ## Deployment
 
